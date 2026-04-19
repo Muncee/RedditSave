@@ -43,11 +43,11 @@ Respond with a JSON array where each element has:
 Only use categories from the provided list. Respond with only the JSON array, no other text.`;
 }
 
-async function callClaude(apiKey: string, prompt: string): Promise<string> {
+async function callClaude(apiKey: string, model: string, prompt: string): Promise<string> {
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
   const client = new Anthropic({ apiKey });
   const response = await client.messages.create({
-    model: "claude-opus-4-7",
+    model,
     max_tokens: 2048,
     messages: [{ role: "user", content: prompt }],
   });
@@ -57,22 +57,22 @@ async function callClaude(apiKey: string, prompt: string): Promise<string> {
   return "[]";
 }
 
-async function callOpenAI(apiKey: string, prompt: string): Promise<string> {
+async function callOpenAI(apiKey: string, model: string, prompt: string): Promise<string> {
   const OpenAI = (await import("openai")).default;
   const client = new OpenAI({ apiKey });
   const response = await client.chat.completions.create({
-    model: "gpt-4o-mini",
+    model,
     max_tokens: 2048,
     messages: [{ role: "user", content: prompt }],
   });
   return response.choices[0]?.message?.content ?? "[]";
 }
 
-async function callGemini(apiKey: string, prompt: string): Promise<string> {
+async function callGemini(apiKey: string, model: string, prompt: string): Promise<string> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const client = new GoogleGenerativeAI(apiKey);
-  const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(prompt);
+  const genModel = client.getGenerativeModel({ model });
+  const result = await genModel.generateContent(prompt);
   return result.response.text();
 }
 
@@ -89,6 +89,7 @@ function extractJSON(text: string): string {
 
 export async function POST() {
   const provider = getSetting("ai_provider") ?? "claude";
+  const model = getSetting("ai_model") ?? (provider === "openai" ? "gpt-4.1" : provider === "gemini" ? "gemini-2.5-flash" : "claude-opus-4-7");
   const apiKey = getSetting("ai_api_key") ?? "";
 
   if (!apiKey) {
@@ -123,11 +124,11 @@ export async function POST() {
       let text: string;
 
       if (provider === "openai") {
-        text = await callOpenAI(apiKey, prompt);
+        text = await callOpenAI(apiKey, model, prompt);
       } else if (provider === "gemini") {
-        text = await callGemini(apiKey, prompt);
+        text = await callGemini(apiKey, model, prompt);
       } else {
-        text = await callClaude(apiKey, prompt);
+        text = await callClaude(apiKey, model, prompt);
       }
 
       const parsed = JSON.parse(extractJSON(text)) as { id: string; categories: string[] }[];

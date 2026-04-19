@@ -4,11 +4,36 @@ import { useState, useEffect } from "react";
 
 type Provider = "claude" | "openai" | "gemini";
 
-const PROVIDERS: { value: Provider; label: string; hint: string; link: string }[] = [
-  { value: "claude", label: "Claude (Anthropic)", hint: "claude-opus-4-7", link: "https://console.anthropic.com/" },
-  { value: "openai", label: "ChatGPT (OpenAI)", hint: "gpt-4o-mini", link: "https://platform.openai.com/api-keys" },
-  { value: "gemini", label: "Gemini (Google)", hint: "gemini-1.5-flash", link: "https://aistudio.google.com/app/apikey" },
-];
+const PROVIDER_MODELS: Record<Provider, { value: string; label: string }[]> = {
+  claude: [
+    { value: "claude-opus-4-7", label: "Claude Opus 4.7 (best)" },
+    { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 (faster)" },
+    { value: "claude-haiku-4-5", label: "Claude Haiku 4.5 (fastest)" },
+  ],
+  openai: [
+    { value: "gpt-4.1", label: "GPT-4.1 (latest)" },
+    { value: "gpt-4.1-mini", label: "GPT-4.1 Mini (faster)" },
+    { value: "o4-mini", label: "o4-mini (reasoning)" },
+    { value: "gpt-4o", label: "GPT-4o" },
+  ],
+  gemini: [
+    { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro (best)" },
+    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (faster)" },
+    { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+  ],
+};
+
+const DEFAULT_MODEL: Record<Provider, string> = {
+  claude: "claude-opus-4-7",
+  openai: "gpt-4.1",
+  gemini: "gemini-2.5-flash",
+};
+
+const PROVIDER_META: Record<Provider, { label: string; link: string }> = {
+  claude: { label: "Claude (Anthropic)", link: "https://console.anthropic.com/" },
+  openai: { label: "ChatGPT (OpenAI)", link: "https://platform.openai.com/api-keys" },
+  gemini: { label: "Gemini (Google)", link: "https://aistudio.google.com/app/apikey" },
+};
 
 interface Props {
   onClose: () => void;
@@ -16,6 +41,7 @@ interface Props {
 
 export default function AISettingsModal({ onClose }: Props) {
   const [provider, setProvider] = useState<Provider>("claude");
+  const [model, setModel] = useState("claude-opus-4-7");
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -24,12 +50,19 @@ export default function AISettingsModal({ onClose }: Props) {
   useEffect(() => {
     fetch("/api/settings")
       .then((r) => r.json())
-      .then((d: { provider: Provider; apiKey: string }) => {
-        setProvider(d.provider ?? "claude");
+      .then((d: { provider: Provider; model: string; apiKey: string }) => {
+        const p = d.provider ?? "claude";
+        setProvider(p);
+        setModel(d.model ?? DEFAULT_MODEL[p]);
         setApiKey(d.apiKey ?? "");
       })
       .catch(() => {});
   }, []);
+
+  function handleProviderChange(p: Provider) {
+    setProvider(p);
+    setModel(DEFAULT_MODEL[p]);
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -38,7 +71,7 @@ export default function AISettingsModal({ onClose }: Props) {
       await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, apiKey }),
+        body: JSON.stringify({ provider, model, apiKey }),
       });
       setSaved(true);
       setTimeout(() => { setSaved(false); onClose(); }, 800);
@@ -47,7 +80,8 @@ export default function AISettingsModal({ onClose }: Props) {
     }
   }
 
-  const selected = PROVIDERS.find((p) => p.value === provider)!;
+  const meta = PROVIDER_META[provider];
+  const models = PROVIDER_MODELS[provider];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
@@ -61,30 +95,46 @@ export default function AISettingsModal({ onClose }: Props) {
         </div>
 
         <div className="space-y-4">
+          {/* Provider */}
           <div>
             <label className="block text-xs text-gray-400 mb-1.5">Provider</label>
             <div className="grid grid-cols-3 gap-2">
-              {PROVIDERS.map((p) => (
+              {(Object.keys(PROVIDER_META) as Provider[]).map((p) => (
                 <button
-                  key={p.value}
-                  onClick={() => setProvider(p.value)}
+                  key={p}
+                  onClick={() => handleProviderChange(p)}
                   className={`py-2 px-3 rounded-lg text-xs font-medium border transition-colors ${
-                    provider === p.value
+                    provider === p
                       ? "bg-purple-700 border-purple-600 text-white"
                       : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200"
                   }`}
                 >
-                  {p.label}
+                  {PROVIDER_META[p].label}
                 </button>
               ))}
             </div>
           </div>
 
+          {/* Model */}
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Model</label>
+            <select
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-gray-500"
+            >
+              {models.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* API Key */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs text-gray-400">API Key</label>
               <a
-                href={selected.link}
+                href={meta.link}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs text-purple-400 hover:text-purple-300"
@@ -97,7 +147,7 @@ export default function AISettingsModal({ onClose }: Props) {
                 type={showKey ? "text" : "password"}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder={`${selected.label} API key`}
+                placeholder={`${meta.label} API key`}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 pr-10"
               />
               <button
@@ -107,7 +157,6 @@ export default function AISettingsModal({ onClose }: Props) {
                 {showKey ? "hide" : "show"}
               </button>
             </div>
-            <p className="text-xs text-gray-600 mt-1">Model used: {selected.hint}</p>
           </div>
         </div>
 
