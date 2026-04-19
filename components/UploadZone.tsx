@@ -81,9 +81,9 @@ export default function UploadZone() {
       const res = await fetch("/api/import", { method: "POST", body: formData });
 
       if (res.ok) {
-        const { count } = await res.json() as { count: number };
+        const { count, debug } = await res.json() as { count: number; debug: string[] };
         if (count === 0) {
-          setError("No items were imported. Make sure the files are saved_posts.csv or saved_comments.csv from Reddit's data export.");
+          setError(`No items imported. Columns found: ${debug?.join(" | ") || "none"}`);
           setLoading(false);
         } else {
           router.push(`/dashboard?imported=${count}`);
