@@ -30,6 +30,9 @@ export default function Dashboard() {
   const [error, setError] = useState("");
   const [fetchingContent, setFetchingContent] = useState(false);
   const [fetchDone, setFetchDone] = useState(false);
+  const [organising, setOrganising] = useState(false);
+  const [organiseDone, setOrganiseDone] = useState(false);
+  const [organiseError, setOrganiseError] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -68,6 +71,21 @@ export default function Dashboard() {
       setFetchDone(true);
     } finally {
       setFetchingContent(false);
+    }
+  }, [fetchData]);
+
+  const autoOrganise = useCallback(async () => {
+    setOrganising(true);
+    setOrganiseError("");
+    try {
+      const res = await fetch("/api/auto-organise", { method: "POST" });
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      await fetchData();
+      setOrganiseDone(true);
+    } catch (e) {
+      setOrganiseError(e instanceof Error ? e.message : "Auto-organise failed");
+    } finally {
+      setOrganising(false);
     }
   }, [fetchData]);
 
@@ -141,6 +159,8 @@ export default function Dashboard() {
           count={filteredItems.length}
           totalCount={items.length}
           onReimport={() => window.location.href = "/"}
+          onAutoOrganise={autoOrganise}
+          organising={organising}
         />
 
         <main className="flex-1 overflow-y-auto">
@@ -167,6 +187,25 @@ export default function Dashboard() {
           {fetchDone && (
             <div className="mx-4 mt-4 p-3 bg-green-900/30 border border-green-700/50 rounded-xl">
               <p className="text-green-300 text-sm">Content loaded successfully.</p>
+            </div>
+          )}
+          {organising && (
+            <div className="mx-4 mt-4 p-3 bg-purple-900/30 border border-purple-700/50 rounded-xl flex items-center gap-3">
+              <svg className="w-4 h-4 text-purple-400 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              <p className="text-purple-300 text-sm">AI is categorising your saved items — this may take a minute...</p>
+            </div>
+          )}
+          {organiseDone && !organising && (
+            <div className="mx-4 mt-4 p-3 bg-green-900/30 border border-green-700/50 rounded-xl">
+              <p className="text-green-300 text-sm">Items organised! Category tags have been applied automatically.</p>
+            </div>
+          )}
+          {organiseError && (
+            <div className="mx-4 mt-4 p-3 bg-red-900/30 border border-red-700/50 rounded-xl">
+              <p className="text-red-300 text-sm">{organiseError}</p>
             </div>
           )}
           {error && (
