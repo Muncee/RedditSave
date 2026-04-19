@@ -16,6 +16,7 @@ interface FilterBarProps {
   totalCount: number;
   onReimport: () => void;
   onAutoOrganise: () => void;
+  onOpenAISettings: () => void;
   organising: boolean;
 }
 
@@ -28,6 +29,7 @@ export default function FilterBar({
   totalCount,
   onReimport,
   onAutoOrganise,
+  onOpenAISettings,
   organising,
 }: FilterBarProps) {
   const types: { label: string; value: Filters["type"] }[] = [
@@ -104,21 +106,33 @@ export default function FilterBar({
           <span className="text-xs text-gray-500">
             {count === totalCount ? `${totalCount} items` : `${count} / ${totalCount}`}
           </span>
-          <button
-            onClick={onAutoOrganise}
-            disabled={organising}
-            className="text-xs disabled:opacity-50 disabled:cursor-not-allowed bg-purple-700 hover:bg-purple-600 text-white px-3 py-1 rounded-lg transition-colors flex items-center gap-1.5"
-          >
-            {organising ? (
-              <>
-                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-                Organising...
-              </>
-            ) : "Auto-organise"}
-          </button>
+          <div className="flex items-center rounded-lg overflow-hidden border border-purple-700">
+            <button
+              onClick={onAutoOrganise}
+              disabled={organising}
+              className="text-xs disabled:opacity-50 disabled:cursor-not-allowed bg-purple-700 hover:bg-purple-600 text-white px-3 py-1 transition-colors flex items-center gap-1.5"
+            >
+              {organising ? (
+                <>
+                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  Organising...
+                </>
+              ) : "Auto-organise"}
+            </button>
+            <button
+              onClick={onOpenAISettings}
+              title="AI settings"
+              className="bg-purple-800 hover:bg-purple-700 text-purple-200 px-2 py-1 transition-colors border-l border-purple-600"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          </div>
           <button
             onClick={onReimport}
             className="text-xs text-gray-500 hover:text-gray-300 border border-gray-700 hover:border-gray-500 px-2 py-1 rounded-lg transition-colors"

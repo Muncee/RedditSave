@@ -80,6 +80,11 @@ function initSchema(db: Database.Database) {
       updated_at INTEGER NOT NULL,
       PRIMARY KEY (item_id, user_id)
     );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `);
 }
 
@@ -200,6 +205,17 @@ export function removeTagFromItem(itemId: string, tagId: string): void {
   getDb()
     .prepare("DELETE FROM item_tags WHERE item_id = ? AND tag_id = ? AND user_id = ?")
     .run(itemId, tagId, LOCAL_USER);
+}
+
+// ── Settings ───────────────────────────────────────────────────────────────
+
+export function getSetting(key: string): string | null {
+  const row = getDb().prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
+  return row?.value ?? null;
+}
+
+export function setSetting(key: string, value: string): void {
+  getDb().prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, value);
 }
 
 export function setItemNote(itemId: string, note: string): void {

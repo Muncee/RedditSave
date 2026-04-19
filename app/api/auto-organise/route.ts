@@ -1,70 +1,31 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { getItems, getTags, createTag, addTagToItem } from "@/lib/db";
+import { getItems, getTags, createTag, addTagToItem, getSetting } from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
 
 export const maxDuration = 300;
 
-const client = new Anthropic();
-
 const CATEGORIES = [
-  "Programming",
-  "Science",
-  "Gaming",
-  "Finance",
-  "Politics",
-  "Sports",
-  "Technology",
-  "Health",
-  "Art & Design",
-  "Music",
-  "Food",
-  "Travel",
-  "Funny",
-  "News",
-  "Philosophy",
-  "DIY",
-  "Nature",
-  "Business",
-  "Movies & TV",
-  "Books",
-  "Relationships",
-  "Education",
-  "History",
-  "Space",
-  "Fitness",
+  "Programming", "Science", "Gaming", "Finance", "Politics", "Sports",
+  "Technology", "Health", "Art & Design", "Music", "Food", "Travel",
+  "Funny", "News", "Philosophy", "DIY", "Nature", "Business",
+  "Movies & TV", "Books", "Relationships", "Education", "History", "Space", "Fitness",
 ];
 
 const CATEGORY_COLORS: Record<string, string> = {
-  "Programming": "#6366f1",
-  "Science": "#06b6d4",
-  "Gaming": "#8b5cf6",
-  "Finance": "#10b981",
-  "Politics": "#ef4444",
-  "Sports": "#f59e0b",
-  "Technology": "#3b82f6",
-  "Health": "#ec4899",
-  "Art & Design": "#a855f7",
-  "Music": "#f97316",
-  "Food": "#84cc16",
-  "Travel": "#14b8a6",
-  "Funny": "#eab308",
-  "News": "#64748b",
-  "Philosophy": "#6366f1",
-  "DIY": "#78716c",
-  "Nature": "#22c55e",
-  "Business": "#0ea5e9",
-  "Movies & TV": "#c084fc",
-  "Books": "#fb923c",
-  "Relationships": "#f43f5e",
-  "Education": "#2563eb",
-  "History": "#92400e",
-  "Space": "#1e1b4b",
-  "Fitness": "#16a34a",
+  "Programming": "#6366f1", "Science": "#06b6d4", "Gaming": "#8b5cf6",
+  "Finance": "#10b981", "Politics": "#ef4444", "Sports": "#f59e0b",
+  "Technology": "#3b82f6", "Health": "#ec4899", "Art & Design": "#a855f7",
+  "Music": "#f97316", "Food": "#84cc16", "Travel": "#14b8a6",
+  "Funny": "#eab308", "News": "#64748b", "Philosophy": "#6366f1",
+  "DIY": "#78716c", "Nature": "#22c55e", "Business": "#0ea5e9",
+  "Movies & TV": "#c084fc", "Books": "#fb923c", "Relationships": "#f43f5e",
+  "Education": "#2563eb", "History": "#92400e", "Space": "#1e1b4b", "Fitness": "#16a34a",
 };
 
 const BATCH_SIZE = 20;
 
-function buildPrompt(items: { id: string; title: string; body: string; subreddit: string; kind: string }[]): string {
+type BatchItem = { id: string; title: string; body: string; subreddit: string; kind: string };
+
+function buildPrompt(items: BatchItem[]): string {
   const list = items.map((item, i) =>
     `${i + 1}. [${item.id}] r/${item.subreddit} - ${item.kind === "t3" ? "Post" : "Comment"}: ${item.title}${item.body ? `\n   Content: ${item.body.slice(0, 200)}` : ""}`
   ).join("\n\n");
@@ -82,7 +43,58 @@ Respond with a JSON array where each element has:
 Only use categories from the provided list. Respond with only the JSON array, no other text.`;
 }
 
+async function callClaude(apiKey: string, prompt: string): Promise<string> {
+  const Anthropic = (await import("@anthropic-ai/sdk")).default;
+  const client = new Anthropic({ apiKey });
+  const response = await client.messages.create({
+    model: "claude-opus-4-7",
+    max_tokens: 2048,
+    messages: [{ role: "user", content: prompt }],
+  });
+  for (const block of response.content) {
+    if (block.type === "text") return block.text;
+  }
+  return "[]";
+}
+
+async function callOpenAI(apiKey: string, prompt: string): Promise<string> {
+  const OpenAI = (await import("openai")).default;
+  const client = new OpenAI({ apiKey });
+  const response = await client.chat.completions.create({
+    model: "gpt-4o-mini",
+    max_tokens: 2048,
+    messages: [{ role: "user", content: prompt }],
+  });
+  return response.choices[0]?.message?.content ?? "[]";
+}
+
+async function callGemini(apiKey: string, prompt: string): Promise<string> {
+  const { GoogleGenerativeAI } = await import("@google/generative-ai");
+  const client = new GoogleGenerativeAI(apiKey);
+  const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const result = await model.generateContent(prompt);
+  return result.response.text();
+}
+
+function extractJSON(text: string): string {
+  // Strip markdown code fences if present
+  const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (match) return match[1].trim();
+  // Find first [ ... ] block
+  const start = text.indexOf("[");
+  const end = text.lastIndexOf("]");
+  if (start !== -1 && end !== -1) return text.slice(start, end + 1);
+  return text.trim();
+}
+
 export async function POST() {
+  const provider = getSetting("ai_provider") ?? "claude";
+  const apiKey = getSetting("ai_api_key") ?? "";
+
+  if (!apiKey) {
+    return Response.json({ error: "No API key configured. Open AI settings to add one." }, { status: 400 });
+  }
+
   const items = getItems();
   if (items.length === 0) return Response.json({ tagged: 0 });
 
@@ -92,8 +104,7 @@ export async function POST() {
   function ensureTag(name: string): string {
     if (tagMap.has(name)) return tagMap.get(name)!;
     const id = uuidv4();
-    const color = CATEGORY_COLORS[name] ?? "#6366f1";
-    createTag(id, name, color);
+    createTag(id, name, CATEGORY_COLORS[name] ?? "#6366f1");
     tagMap.set(name, id);
     return id;
   }
@@ -103,32 +114,28 @@ export async function POST() {
 
   for (let i = 0; i < items.length; i += BATCH_SIZE) {
     const batch = items.slice(i, i + BATCH_SIZE).map((item) => ({
-      id: item.id,
-      title: item.title,
-      body: item.body,
-      subreddit: item.subreddit,
-      kind: item.kind,
+      id: item.id, title: item.title, body: item.body,
+      subreddit: item.subreddit, kind: item.kind,
     }));
 
     try {
-      const response = await client.messages.create({
-        model: "claude-opus-4-7",
-        max_tokens: 2048,
-        messages: [{ role: "user", content: buildPrompt(batch) }],
-      });
+      const prompt = buildPrompt(batch);
+      let text: string;
 
-      let text = "";
-      for (const block of response.content) {
-        if (block.type === "text") text = block.text;
+      if (provider === "openai") {
+        text = await callOpenAI(apiKey, prompt);
+      } else if (provider === "gemini") {
+        text = await callGemini(apiKey, prompt);
+      } else {
+        text = await callClaude(apiKey, prompt);
       }
 
-      const parsed = JSON.parse(text) as { id: string; categories: string[] }[];
+      const parsed = JSON.parse(extractJSON(text)) as { id: string; categories: string[] }[];
 
       for (const result of parsed) {
         for (const cat of result.categories) {
           if (!CATEGORIES.includes(cat)) continue;
-          const tagId = ensureTag(cat);
-          addTagToItem(result.id, tagId);
+          addTagToItem(result.id, ensureTag(cat));
         }
         tagged++;
       }

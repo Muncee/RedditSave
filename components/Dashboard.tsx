@@ -6,6 +6,7 @@ import Sidebar from "./Sidebar";
 import FilterBar from "./FilterBar";
 import SavedItem from "./SavedItem";
 import ItemModal from "./ItemModal";
+import AISettingsModal from "./AISettingsModal";
 
 interface Filters {
   type: "all" | "post" | "comment";
@@ -33,6 +34,7 @@ export default function Dashboard() {
   const [organising, setOrganising] = useState(false);
   const [organiseDone, setOrganiseDone] = useState(false);
   const [organiseError, setOrganiseError] = useState("");
+  const [showAISettings, setShowAISettings] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -160,6 +162,7 @@ export default function Dashboard() {
           totalCount={items.length}
           onReimport={() => window.location.href = "/"}
           onAutoOrganise={autoOrganise}
+          onOpenAISettings={() => setShowAISettings(true)}
           organising={organising}
         />
 
@@ -259,6 +262,10 @@ export default function Dashboard() {
           </div>
         </main>
       </div>
+
+      {showAISettings && (
+        <AISettingsModal onClose={() => setShowAISettings(false)} />
+      )}
 
       {selectedItem && (
         <ItemModal
