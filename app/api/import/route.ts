@@ -39,6 +39,17 @@ function col(row: Record<string, string>, ...keys: string[]): string {
   return "";
 }
 
+// Reddit's minimal export only has id + permalink
+// Permalink format: /r/subreddit/comments/postid/title_slug/[commentid/]
+function parsePermalink(permalink: string): { subreddit: string; title: string } {
+  const parts = permalink.replace(/^\/|\/$/g, "").split("/");
+  // ["r", "subreddit", "comments", "postid", "title_slug", ...]
+  const subreddit = parts[1] ?? "";
+  const slug = parts[4] ?? "";
+  const title = slug.replace(/_/g, " ").trim();
+  return { subreddit, title };
+}
+
 export async function POST(request: Request) {
   const formData = await request.formData();
   let total = 0;
@@ -62,20 +73,24 @@ export async function POST(request: Request) {
 
     const items: Omit<SavedItemRow, "imported_at">[] = records
       .filter((r) => Object.values(r).some((v) => v !== ""))
-      .map((r) => ({
-        id: normaliseId(col(r, "id"), "t3"),
-        kind: "t3" as const,
-        title: col(r, "title"),
-        author: col(r, "author"),
-        subreddit: col(r, "subreddit", "subreddit_name_prefixed").replace(/^r\//, ""),
-        url: col(r, "url"),
-        permalink: col(r, "permalink"),
-        body: col(r, "selftext", "body", "text"),
-        score: parseInt(col(r, "score") || "0") || 0,
-        num_comments: parseInt(col(r, "num_comments", "comments") || "0") || 0,
-        created_utc: parseTimestamp(col(r, "created_utc", "date", "created")),
-      }))
-      .filter((item) => item.subreddit || item.title || item.body);
+      .map((r) => {
+        const permalink = col(r, "permalink");
+        const parsed = parsePermalink(permalink);
+        return {
+          id: normaliseId(col(r, "id"), "t3"),
+          kind: "t3" as const,
+          title: col(r, "title") || parsed.title,
+          author: col(r, "author"),
+          subreddit: (col(r, "subreddit", "subreddit_name_prefixed") || parsed.subreddit).replace(/^r\//, ""),
+          url: col(r, "url") || `https://www.reddit.com${permalink}`,
+          permalink,
+          body: col(r, "selftext", "body", "text"),
+          score: parseInt(col(r, "score") || "0") || 0,
+          num_comments: parseInt(col(r, "num_comments", "comments") || "0") || 0,
+          created_utc: parseTimestamp(col(r, "created_utc", "date", "created")),
+        };
+      })
+      .filter((item) => item.permalink);
 
     upsertItems(items);
     total += items.length;
@@ -100,20 +115,24 @@ export async function POST(request: Request) {
 
     const items: Omit<SavedItemRow, "imported_at">[] = records
       .filter((r) => Object.values(r).some((v) => v !== ""))
-      .map((r) => ({
-        id: normaliseId(col(r, "id"), "t1"),
-        kind: "t1" as const,
-        title: col(r, "link_title", "post_title", "title"),
-        author: col(r, "author"),
-        subreddit: col(r, "subreddit", "subreddit_name_prefixed").replace(/^r\//, ""),
-        url: col(r, "link_url", "url"),
-        permalink: col(r, "permalink"),
-        body: col(r, "body", "comment"),
-        score: parseInt(col(r, "score") || "0") || 0,
-        num_comments: 0,
-        created_utc: parseTimestamp(col(r, "created_utc", "date", "created")),
-      }))
-      .filter((item) => item.body || item.subreddit);
+      .map((r) => {
+        const permalink = col(r, "permalink");
+        const parsed = parsePermalink(permalink);
+        return {
+          id: normaliseId(col(r, "id"), "t1"),
+          kind: "t1" as const,
+          title: col(r, "link_title", "post_title", "title") || parsed.title,
+          author: col(r, "author"),
+          subreddit: (col(r, "subreddit", "subreddit_name_prefixed") || parsed.subreddit).replace(/^r\//, ""),
+          url: col(r, "link_url", "url") || `https://www.reddit.com${permalink}`,
+          permalink,
+          body: col(r, "body", "comment"),
+          score: parseInt(col(r, "score") || "0") || 0,
+          num_comments: 0,
+          created_utc: parseTimestamp(col(r, "created_utc", "date", "created")),
+        };
+      })
+      .filter((item) => item.permalink);
 
     upsertItems(items);
     total += items.length;
