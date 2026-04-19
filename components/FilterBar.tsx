@@ -14,8 +14,7 @@ interface FilterBarProps {
   setSort: (s: "newest" | "oldest" | "top") => void;
   count: number;
   totalCount: number;
-  username: string;
-  onSignOut: () => void;
+  onReimport: () => void;
 }
 
 export default function FilterBar({
@@ -25,8 +24,7 @@ export default function FilterBar({
   setSort,
   count,
   totalCount,
-  username,
-  onSignOut,
+  onReimport,
 }: FilterBarProps) {
   const types: { label: string; value: Filters["type"] }[] = [
     { label: "All", value: "all" },
@@ -102,15 +100,12 @@ export default function FilterBar({
           <span className="text-xs text-gray-500">
             {count === totalCount ? `${totalCount} items` : `${count} / ${totalCount}`}
           </span>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-400">{username}</span>
-            <button
-              onClick={onSignOut}
-              className="text-xs text-gray-500 hover:text-gray-300 border border-gray-700 hover:border-gray-500 px-2 py-1 rounded-lg transition-colors"
-            >
-              Sign out
-            </button>
-          </div>
+          <button
+            onClick={onReimport}
+            className="text-xs text-gray-500 hover:text-gray-300 border border-gray-700 hover:border-gray-500 px-2 py-1 rounded-lg transition-colors"
+          >
+            Re-import
+          </button>
         </div>
       </div>
     </header>

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { signOut } from "next-auth/react";
 import { RedditItem, Tag, ItemMeta } from "@/lib/types";
 import Sidebar from "./Sidebar";
 import FilterBar from "./FilterBar";
@@ -15,15 +14,9 @@ interface Filters {
   search: string;
 }
 
-interface DashboardProps {
-  username: string;
-}
-
-export default function Dashboard({ username }: DashboardProps) {
+export default function Dashboard() {
   const [items, setItems] = useState<RedditItem[]>([]);
-  const [after, setAfter] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [tags, setTags] = useState<Tag[]>([]);
   const [itemMeta, setItemMeta] = useState<Record<string, ItemMeta>>({});
   const [selectedItem, setSelectedItem] = useState<RedditItem | null>(null);
@@ -36,23 +29,28 @@ export default function Dashboard({ username }: DashboardProps) {
   const [sort, setSort] = useState<"newest" | "oldest" | "top">("newest");
   const [error, setError] = useState("");
 
-  const fetchItems = useCallback(async (cursor?: string) => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ limit: "25" });
-      if (cursor) params.set("after", cursor);
-      const res = await fetch(`/api/saved?${params}`);
-      if (res.status === 401) {
-        setError("Session expired. Please sign in again.");
-        return;
-      }
-      if (!res.ok) throw new Error("Failed to fetch saved items");
-      const data = await res.json();
-      const newItems = (data.data?.children ?? []) as RedditItem[];
-      setItems((prev) => (cursor ? [...prev, ...newItems] : newItems));
-      setAfter(data.data?.after ?? null);
-      setHasMore(!!data.data?.after);
+      const [itemsRes, tagsRes, metaRes] = await Promise.all([
+        fetch("/api/items"),
+        fetch("/api/tags"),
+        fetch("/api/items/meta"),
+      ]);
+
+      if (!itemsRes.ok) throw new Error("Failed to load items");
+
+      const itemsData = await itemsRes.json() as RedditItem[];
+      const tagsData = await tagsRes.json() as Tag[];
+      const metaData = await metaRes.json() as ItemMeta[];
+
+      setItems(itemsData);
+      setTags(tagsData);
+
+      const metaMap: Record<string, ItemMeta> = {};
+      for (const m of metaData) metaMap[m.item_id] = m;
+      setItemMeta(metaMap);
     } catch (e) {
       setError(e instanceof Error ? e.message : "An error occurred");
     } finally {
@@ -60,19 +58,7 @@ export default function Dashboard({ username }: DashboardProps) {
     }
   }, []);
 
-  useEffect(() => {
-    Promise.all([
-      fetchItems(),
-      fetch("/api/tags").then((r) => r.json()).then(setTags),
-      fetch("/api/items/meta")
-        .then((r) => r.json())
-        .then((data: ItemMeta[]) => {
-          const map: Record<string, ItemMeta> = {};
-          for (const m of data) map[m.item_id] = m;
-          setItemMeta(map);
-        }),
-    ]);
-  }, [fetchItems]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const filteredItems = items
     .filter((item) => {
@@ -87,11 +73,8 @@ export default function Dashboard({ username }: DashboardProps) {
       }
       if (filters.search) {
         const q = filters.search.toLowerCase();
-        const isPost = item.kind === "t3";
-        const title = isPost ? item.data.title : (item.data as { link_title: string }).link_title;
-        const body = isPost
-          ? (item.data as { selftext: string }).selftext
-          : (item.data as { body: string }).body;
+        const title = item.kind === "t3" ? item.data.title : item.data.link_title;
+        const body = item.kind === "t3" ? item.data.selftext : item.data.body;
         if (
           !title?.toLowerCase().includes(q) &&
           !body?.toLowerCase().includes(q) &&
@@ -135,8 +118,7 @@ export default function Dashboard({ username }: DashboardProps) {
           setSort={setSort}
           count={filteredItems.length}
           totalCount={items.length}
-          username={username}
-          onSignOut={() => signOut({ callbackUrl: "/" })}
+          onReimport={() => window.location.href = "/"}
         />
 
         <main className="flex-1 overflow-y-auto">
@@ -146,14 +128,7 @@ export default function Dashboard({ username }: DashboardProps) {
             </div>
           )}
 
-          {!error && !loading && items.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-gray-500">
-              <p className="text-lg font-medium">No saved items found</p>
-              <p className="text-sm mt-1">Items you save on Reddit will appear here</p>
-            </div>
-          )}
-
-          {!error && !loading && items.length > 0 && filteredItems.length === 0 && (
+          {!loading && items.length > 0 && filteredItems.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-gray-500">
               <p className="text-base font-medium">No items match your filters</p>
               <button
@@ -166,44 +141,33 @@ export default function Dashboard({ username }: DashboardProps) {
           )}
 
           <div className="p-4 space-y-3 max-w-3xl mx-auto">
-            {filteredItems.map((item) => (
-              <SavedItem
-                key={item.data.name}
-                item={item}
-                meta={itemMeta[item.data.name]}
-                onClick={() => setSelectedItem(item)}
-                isSelected={selectedItem?.data.name === item.data.name}
-              />
-            ))}
-
-            {loading && (
-              <div className="space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-4 animate-pulse">
-                    <div className="flex gap-3">
-                      <div className="flex-1 space-y-2">
-                        <div className="h-3 bg-gray-800 rounded w-1/4" />
-                        <div className="h-4 bg-gray-800 rounded w-3/4" />
-                        <div className="h-3 bg-gray-800 rounded w-1/2" />
-                      </div>
+            {loading ? (
+              [...Array(5)].map((_, i) => (
+                <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-4 animate-pulse">
+                  <div className="flex gap-3">
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3 bg-gray-800 rounded w-1/4" />
+                      <div className="h-4 bg-gray-800 rounded w-3/4" />
+                      <div className="h-3 bg-gray-800 rounded w-1/2" />
                     </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))
+            ) : (
+              filteredItems.map((item) => (
+                <SavedItem
+                  key={item.data.name}
+                  item={item}
+                  meta={itemMeta[item.data.name]}
+                  onClick={() => setSelectedItem(item)}
+                  isSelected={selectedItem?.data.name === item.data.name}
+                />
+              ))
             )}
 
-            {!loading && hasMore && (
-              <button
-                onClick={() => fetchItems(after!)}
-                className="w-full py-3 text-sm text-gray-400 hover:text-gray-200 border border-gray-800 hover:border-gray-600 rounded-xl transition-colors"
-              >
-                Load more
-              </button>
-            )}
-
-            {!loading && !hasMore && items.length > 0 && (
+            {!loading && items.length > 0 && (
               <p className="text-center text-xs text-gray-600 py-4">
-                All {items.length} saved items loaded
+                {items.length} saved items
               </p>
             )}
           </div>

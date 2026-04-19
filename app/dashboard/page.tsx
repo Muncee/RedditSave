@@ -1,13 +1,10 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getItemCount } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Dashboard from "@/components/Dashboard";
 
-export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
+export default function DashboardPage() {
+  const count = getItemCount();
+  if (count === 0) redirect("/");
 
-  if (!session) redirect("/");
-  if (session.error === "RefreshAccessTokenError") redirect("/");
-
-  return <Dashboard username={session.user?.name ?? ""} />;
+  return <Dashboard />;
 }
