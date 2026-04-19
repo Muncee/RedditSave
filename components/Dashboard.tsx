@@ -28,6 +28,8 @@ export default function Dashboard() {
   });
   const [sort, setSort] = useState<"newest" | "oldest" | "top">("newest");
   const [error, setError] = useState("");
+  const [fetchingContent, setFetchingContent] = useState(false);
+  const [fetchDone, setFetchDone] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -58,7 +60,27 @@ export default function Dashboard() {
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const loadContent = useCallback(async () => {
+    setFetchingContent(true);
+    try {
+      await fetch("/api/fetch-content", { method: "POST" });
+      await fetchData();
+      setFetchDone(true);
+    } finally {
+      setFetchingContent(false);
+    }
+  }, [fetchData]);
+
+  useEffect(() => {
+    fetchData().then(() => {
+      // Auto-fetch content on first load if items lack timestamps
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("imported")) {
+        loadContent();
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filteredItems = items
     .filter((item) => {
@@ -122,6 +144,31 @@ export default function Dashboard() {
         />
 
         <main className="flex-1 overflow-y-auto">
+          {fetchingContent && (
+            <div className="mx-4 mt-4 p-3 bg-blue-900/30 border border-blue-700/50 rounded-xl flex items-center gap-3">
+              <svg className="w-4 h-4 text-blue-400 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              <p className="text-blue-300 text-sm">Loading post content from Reddit — this may take a moment for large libraries...</p>
+            </div>
+          )}
+          {!fetchingContent && !fetchDone && !loading && items.length > 0 && (
+            <div className="mx-4 mt-4 p-3 bg-gray-800/60 border border-gray-700 rounded-xl flex items-center justify-between gap-3">
+              <p className="text-gray-400 text-sm">Content not loaded yet — titles and timestamps may be missing.</p>
+              <button
+                onClick={loadContent}
+                className="text-xs shrink-0 bg-reddit hover:bg-orange-500 text-white px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Load content
+              </button>
+            </div>
+          )}
+          {fetchDone && (
+            <div className="mx-4 mt-4 p-3 bg-green-900/30 border border-green-700/50 rounded-xl">
+              <p className="text-green-300 text-sm">Content loaded successfully.</p>
+            </div>
+          )}
           {error && (
             <div className="m-4 p-4 bg-red-900/30 border border-red-700/50 rounded-xl text-red-300 text-sm">
               {error}

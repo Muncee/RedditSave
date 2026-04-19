@@ -115,6 +115,18 @@ export function getItems(): SavedItemRow[] {
     .all() as SavedItemRow[];
 }
 
+export function getItemIds(): { id: string }[] {
+  return getDb().prepare("SELECT id FROM saved_items").all() as { id: string }[];
+}
+
+export function updateItem(id: string, data: Partial<Omit<SavedItemRow, "id" | "kind" | "imported_at">>): void {
+  const entries = Object.entries(data).filter(([, v]) => v !== undefined && v !== null);
+  if (entries.length === 0) return;
+  const sets = entries.map(([k]) => `${k} = ?`).join(", ");
+  const values = entries.map(([, v]) => v);
+  getDb().prepare(`UPDATE saved_items SET ${sets} WHERE id = ?`).run(...values, id);
+}
+
 export function deleteItem(id: string): void {
   getDb().prepare("DELETE FROM saved_items WHERE id = ?").run(id);
 }
